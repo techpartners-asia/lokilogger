@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"time"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // LogEntry represents a single log entry with timestamp and message
@@ -109,6 +111,76 @@ func (l *Logger) Warn(msg string, fields ...zap.Field) error {
 	return l.sendLog(entry)
 }
 
+// fieldsToMap converts Zap fields to a map[string]string
+func fieldsToMap(fields []zap.Field) map[string]string {
+	result := make(map[string]string)
+	for _, field := range fields {
+		switch field.Type {
+		case zapcore.StringType:
+			result[field.Key] = field.String
+		case zapcore.Int64Type:
+			result[field.Key] = fmt.Sprintf("%d", field.Integer)
+		case zapcore.Int32Type:
+			result[field.Key] = fmt.Sprintf("%d", int32(field.Integer))
+		case zapcore.Int16Type:
+			result[field.Key] = fmt.Sprintf("%d", int16(field.Integer))
+		case zapcore.Int8Type:
+			result[field.Key] = fmt.Sprintf("%d", int8(field.Integer))
+		case zapcore.Uint64Type:
+			result[field.Key] = fmt.Sprintf("%d", uint64(field.Integer))
+		case zapcore.Uint32Type:
+			result[field.Key] = fmt.Sprintf("%d", uint32(field.Integer))
+		case zapcore.Uint16Type:
+			result[field.Key] = fmt.Sprintf("%d", uint16(field.Integer))
+		case zapcore.Uint8Type:
+			result[field.Key] = fmt.Sprintf("%d", uint8(field.Integer))
+		case zapcore.Float64Type:
+			result[field.Key] = fmt.Sprintf("%.1f", math.Float64frombits(uint64(field.Integer)))
+		case zapcore.Float32Type:
+			result[field.Key] = fmt.Sprintf("%.1f", math.Float32frombits(uint32(field.Integer)))
+		case zapcore.BoolType:
+			result[field.Key] = fmt.Sprintf("%v", field.Integer == 1)
+		case zapcore.DurationType:
+			result[field.Key] = time.Duration(field.Integer).String()
+		case zapcore.TimeType:
+			if field.Interface != nil {
+				result[field.Key] = time.Unix(0, field.Integer).In(field.Interface.(*time.Location)).String()
+			} else {
+				result[field.Key] = time.Unix(0, field.Integer).String()
+			}
+		case zapcore.TimeFullType:
+			result[field.Key] = field.Interface.(time.Time).String()
+		case zapcore.ErrorType:
+			result[field.Key] = field.Interface.(error).Error()
+		case zapcore.StringerType:
+			result[field.Key] = field.Interface.(fmt.Stringer).String()
+		case zapcore.ReflectType:
+			result[field.Key] = fmt.Sprintf("%v", field.Interface)
+		case zapcore.ArrayMarshalerType:
+			result[field.Key] = fmt.Sprintf("%v", field.Interface)
+		case zapcore.ObjectMarshalerType:
+			result[field.Key] = fmt.Sprintf("%v", field.Interface)
+		case zapcore.InlineMarshalerType:
+			result[field.Key] = fmt.Sprintf("%v", field.Interface)
+		case zapcore.BinaryType:
+			result[field.Key] = fmt.Sprintf("%x", field.Interface.([]byte))
+		case zapcore.ByteStringType:
+			result[field.Key] = fmt.Sprintf("%x", field.Interface.([]byte))
+		case zapcore.Complex128Type:
+			result[field.Key] = fmt.Sprintf("%v", field.Interface.(complex128))
+		case zapcore.Complex64Type:
+			result[field.Key] = fmt.Sprintf("%v", field.Interface.(complex64))
+		case zapcore.UintptrType:
+			result[field.Key] = fmt.Sprintf("%d", uintptr(field.Integer))
+		case zapcore.NamespaceType:
+			// Skip namespace fields as they don't have a direct string representation
+		case zapcore.SkipType:
+			// Skip skip fields
+		}
+	}
+	return result
+}
+
 // sendLog sends a log entry to Loki
 func (l *Logger) sendLog(entry LogEntry) error {
 	// Create structured log entry
@@ -118,12 +190,13 @@ func (l *Logger) sendLog(entry LogEntry) error {
 	logger.Info(entry.Message)
 
 	// Prepare Loki payload
+	streamMap := fieldsToMap(entry.Fields)
+	streamMap["source"] = "lokilogger"
+
 	payload := LokiPayload{
 		Streams: []Stream{
 			{
-				Stream: map[string]string{
-					"source": "lokilogger",
-				},
+				Stream: streamMap,
 				Values: [][]string{
 					{
 						fmt.Sprintf("%d", entry.Timestamp.UnixNano()),
