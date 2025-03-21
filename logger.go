@@ -34,6 +34,7 @@ type Logger struct {
 	baseURL    string
 	httpClient *http.Client
 	logger     *zap.Logger
+	service    string
 }
 
 // Config holds the configuration for the logger
@@ -63,6 +64,7 @@ func New(config Config) (*Logger, error) {
 			zap.String("service", config.Service),
 			zap.String("environment", config.Environment),
 		),
+		service: config.Service,
 	}, nil
 }
 
@@ -190,17 +192,32 @@ func (l *Logger) sendLog(entry LogEntry) error {
 	logger.Info(entry.Message)
 
 	// Prepare Loki payload
-	streamMap := fieldsToMap(entry.Fields)
-	streamMap["source"] = "lokilogger"
+
+	// Format the complete log message with all fields
+	var messageBuilder bytes.Buffer
+	messageBuilder.WriteString(entry.Message)
+	if len(entry.Fields) > 0 {
+		messageBuilder.WriteString(" | ")
+		for i, field := range entry.Fields {
+			if i > 0 {
+				messageBuilder.WriteString(" ")
+			}
+			messageBuilder.WriteString(field.Key)
+			messageBuilder.WriteString("=")
+			messageBuilder.WriteString(fieldsToMap([]zap.Field{field})[field.Key])
+		}
+	}
 
 	payload := LokiPayload{
 		Streams: []Stream{
 			{
-				Stream: streamMap,
+				Stream: map[string]string{
+					"source": l.service,
+				},
 				Values: [][]string{
 					{
 						fmt.Sprintf("%d", entry.Timestamp.UnixNano()),
-						entry.Message,
+						messageBuilder.String(),
 					},
 				},
 			},
