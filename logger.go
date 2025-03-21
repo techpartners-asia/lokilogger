@@ -17,6 +17,7 @@ type LogEntry struct {
 	Timestamp time.Time `json:"timestamp"`
 	Message   string    `json:"message"`
 	Fields    []zap.Field
+	Level     zapcore.Level
 }
 
 // LokiPayload represents the structure expected by Loki's HTTP API
@@ -74,6 +75,7 @@ func (l *Logger) Info(msg string, fields ...zap.Field) error {
 		Timestamp: time.Now(),
 		Message:   msg,
 		Fields:    fields,
+		Level:     zapcore.InfoLevel,
 	}
 
 	return l.sendLog(entry)
@@ -86,6 +88,7 @@ func (l *Logger) Error(msg string, err error, fields ...zap.Field) error {
 		Timestamp: time.Now(),
 		Message:   msg,
 		Fields:    fields,
+		Level:     zapcore.ErrorLevel,
 	}
 
 	return l.sendLog(entry)
@@ -97,6 +100,7 @@ func (l *Logger) Debug(msg string, fields ...zap.Field) error {
 		Timestamp: time.Now(),
 		Message:   msg,
 		Fields:    fields,
+		Level:     zapcore.DebugLevel,
 	}
 
 	return l.sendLog(entry)
@@ -108,6 +112,7 @@ func (l *Logger) Warn(msg string, fields ...zap.Field) error {
 		Timestamp: time.Now(),
 		Message:   msg,
 		Fields:    fields,
+		Level:     zapcore.WarnLevel,
 	}
 
 	return l.sendLog(entry)
@@ -189,7 +194,16 @@ func (l *Logger) sendLog(entry LogEntry) error {
 	logger := l.logger.With(entry.Fields...)
 
 	// Log locally using Zap
-	logger.Info(entry.Message)
+	switch entry.Level {
+	case zapcore.DebugLevel:
+		logger.Debug(entry.Message, entry.Fields...)
+	case zapcore.InfoLevel:
+		logger.Info(entry.Message, entry.Fields...)
+	case zapcore.WarnLevel:
+		logger.Warn(entry.Message, entry.Fields...)
+	case zapcore.ErrorLevel:
+		logger.Error(entry.Message, entry.Fields...)
+	}
 
 	// Prepare Loki payload
 
@@ -207,6 +221,11 @@ func (l *Logger) sendLog(entry LogEntry) error {
 			messageBuilder.WriteString(fieldsToMap([]zap.Field{field})[field.Key])
 		}
 	}
+
+	labels := map[string]string{
+		"source": l.service,
+	}
+	labels["level"] = entry.Level.String()
 
 	payload := LokiPayload{
 		Streams: []Stream{
