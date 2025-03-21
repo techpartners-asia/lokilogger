@@ -61,10 +61,7 @@ func New(config Config) (*Logger, error) {
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		logger: logger.With(
-			zap.String("service", config.Service),
-			zap.String("environment", config.Environment),
-		),
+		logger:  logger,
 		service: config.Service,
 	}, nil
 }
