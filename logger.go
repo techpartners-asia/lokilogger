@@ -230,9 +230,7 @@ func (l *Logger) sendLog(entry LogEntry) error {
 	payload := LokiPayload{
 		Streams: []Stream{
 			{
-				Stream: map[string]string{
-					"source": l.service,
-				},
+				Stream: labels,
 				Values: [][]string{
 					{
 						fmt.Sprintf("%d", entry.Timestamp.UnixNano()),
