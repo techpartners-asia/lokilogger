@@ -32,10 +32,12 @@ type Stream struct {
 
 // Logger handles communication with Loki and local logging
 type Logger struct {
-	baseURL    string
-	httpClient *http.Client
-	logger     *zap.Logger
-	service    string
+	baseURL     string
+	httpClient  *http.Client
+	logger      *zap.Logger
+	service     string
+	Labels      map[string]string
+	Environment string
 }
 
 // Config holds the configuration for the logger
@@ -64,6 +66,11 @@ func New(config Config) (*Logger, error) {
 		logger:  logger,
 		service: config.Service,
 	}, nil
+}
+
+func (l *Logger) Label(key, value string) *Logger {
+	l.Labels[key] = value
+	return l
 }
 
 // Info logs an info message and sends it to Loki
@@ -221,8 +228,13 @@ func (l *Logger) sendLog(entry LogEntry) error {
 
 	labels := map[string]string{
 		"source": l.service,
+		"env":    l.Environment,
+		"level":  entry.Level.String(),
 	}
-	labels["level"] = entry.Level.String()
+
+	for key, value := range l.Labels {
+		labels[key] = value
+	}
 
 	payload := LokiPayload{
 		Streams: []Stream{
