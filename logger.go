@@ -65,6 +65,7 @@ func New(config Config) (*Logger, error) {
 		},
 		logger:  logger,
 		service: config.Service,
+		Labels:  make(map[string]string),
 	}, nil
 }
 
