@@ -229,9 +229,11 @@ func (l *Logger) sendLog(entry LogEntry) error {
 	}
 
 	labels := map[string]string{
-		"source": l.service,
-		"env":    l.Environment,
-		"level":  entry.Level.String(),
+		"source":       l.service,
+		"env":          l.Environment,
+		"level":        entry.Level.String(),
+		"service":      l.service,
+		"service_name": l.service,
 	}
 
 	for key, value := range l.Labels {
