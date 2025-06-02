@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -38,6 +39,7 @@ type Logger struct {
 	service     string
 	Labels      map[string]string
 	Environment string
+	mu          sync.RWMutex // Add mutex for thread-safe access to Labels
 }
 
 // Config holds the configuration for the logger
@@ -71,6 +73,14 @@ func New(config Config) (*Logger, error) {
 }
 
 func (l *Logger) Label(key, value string) *Logger {
+	if l == nil {
+		panic("logger is nil")
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.Labels == nil {
+		l.Labels = make(map[string]string)
+	}
 	l.Labels[key] = value
 	return l
 }
@@ -236,9 +246,11 @@ func (l *Logger) sendLog(entry LogEntry) error {
 		"service_name": l.service,
 	}
 
+	l.mu.RLock()
 	for key, value := range l.Labels {
 		labels[key] = value
 	}
+	l.mu.RUnlock()
 
 	payload := LokiPayload{
 		Streams: []Stream{

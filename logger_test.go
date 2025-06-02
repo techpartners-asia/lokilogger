@@ -9,6 +9,18 @@ import (
 	"go.uber.org/zap"
 )
 
+func TestExec(t *testing.T) {
+	logger, err := New(Config{
+		BaseURL:     "http://localhost:3100/api/v1/push",
+		Service:     "test",
+		Environment: "test",
+	})
+	if err != nil {
+		t.Fatalf("failed to create logger: %v", err)
+	}
+	logger.Info("test", zap.String("key", "value"))
+}
+
 func TestFieldsToMap(t *testing.T) {
 	err := fmt.Errorf("test error")
 	stringer := &testStringer{value: "test stringer"}
